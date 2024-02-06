@@ -23,11 +23,11 @@ type HTTPServer struct {
 }
 
 type DBConn struct {
-	Address  string `yaml:"address" env:"DB_ADDR" env-default:"localhost"`
-	Port     string `yaml:"port" env:"DB_PORT" env-default:"5432"`
-	Name     string `yaml:"db_name" env:"DB_NAME" env-default:"pud_test"`
-	Username string `yaml:"username" env:"DB_USERNAME" env-required:"true"`
-	Password string `yaml:"password" env:"DB_PASSWORD" env-required:"true"`
+	DbAddr     string `yaml:"address" env:"DB_ADDR" env-default:"localhost"`
+	DbPort     string `yaml:"port" env:"DB_PORT" env-default:"5432"`
+	DbName     string `yaml:"db_name" env:"DB_NAME" env-default:"pud_test"`
+	DbUsername string `yaml:"username" env:"DB_USERNAME" env-required:"true"`
+	DbPassword string `yaml:"password" env:"DB_PASSWORD" env-required:"true"`
 }
 
 // Reads config from YAML file in CONFIG_PATH
