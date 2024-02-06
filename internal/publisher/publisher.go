@@ -1,16 +1,13 @@
 package publisher
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
-
-	stan "github.com/nats-io/stan.go"
 )
 
-type msg struct {
+type Msg struct {
 	OrderUID    string `json:"order_uid"`
 	TrackNumber string `json:"track_number"`
 	Entry       string `json:"entry" fake:"{randomstring:[WBIL, TEST, UNNAMED]}"`
@@ -60,19 +57,20 @@ type Item struct {
 	Status      int    `json:"status" fake:"{intrange:200,202}"`
 }
 
-func Publish() {
-	// Connect to NATS Streaming Server
-	sc, err := stan.Connect("test-cluster", "clientID")
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	// Publish a message
-	sc.Publish("foo", []byte("test"))
-	sc.Close()
-}
+// func Publish() {
+// 	// Connect to NATS Streaming Server
+// 	sc, err := stan.Connect("test-cluster", "clientID")
+// 	if err != nil {
+// 		fmt.Println(err.Error())
+// 		return
+// 	}
+// 	// Publish a message
+// 	sc.Publish("foo", GetMsg())
+// 	defer sc.Close()
+// }
 
-func getMsg() []byte {
-	var f msg
+func GetMsg() Msg {
+	var f Msg
 	gofakeit.Struct(&f)
 	f.Payment.Transaction = f.OrderUID
 
@@ -85,9 +83,10 @@ func getMsg() []byte {
 
 	fmt.Printf("Fake struct: %+v\n", f)
 
-	m, _ := json.Marshal(f)
+	//m, _ := json.Marshal(f)
 
 	//fmt.Printf("Published message: %s\n", m)
 
-	return m
+	return f
+
 }
