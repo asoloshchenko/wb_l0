@@ -3,56 +3,10 @@ package cache
 import (
 	"errors"
 	"sync"
+	"test/internal/model"
+	"test/internal/postgres"
 	"time"
 )
-
-type DataStruct struct {
-	OrderUID    string `json:"order_uid"`
-	TrackNumber string `json:"track_number"`
-	Entry       string `json:"entry"`
-	Delivery    struct {
-		Name    string `json:"name"`
-		Phone   string `json:"phone"`
-		Zip     string `json:"zip"`
-		City    string `json:"city"`
-		Address string `json:"address"`
-		Region  string `json:"region"`
-		Email   string `json:"email"`
-	} `json:"delivery"`
-	Payment struct {
-		Transaction  string `json:"transaction"`
-		RequestID    string `json:"request_id"`
-		Currency     string `json:"currency"`
-		Provider     string `json:"provider"`
-		Amount       int    `json:"amount"`
-		PaymentDt    int    `json:"payment_dt"`
-		Bank         string `json:"bank"`
-		DeliveryCost int    `json:"delivery_cost"`
-		GoodsTotal   int    `json:"goods_total"`
-		CustomFee    int    `json:"custom_fee"`
-	} `json:"payment"`
-	Items []struct {
-		ChrtID      int    `json:"chrt_id"`
-		TrackNumber string `json:"track_number"`
-		Price       int    `json:"price"`
-		Rid         string `json:"rid"`
-		Name        string `json:"name"`
-		Sale        int    `json:"sale"`
-		Size        string `json:"size"`
-		TotalPrice  int    `json:"total_price"`
-		NmID        int    `json:"nm_id"`
-		Brand       string `json:"brand"`
-		Status      int    `json:"status"`
-	} `json:"items"`
-	Locale            string    `json:"locale"`
-	InternalSignature string    `json:"internal_signature"`
-	CustomerID        string    `json:"customer_id"`
-	DeliveryService   string    `json:"delivery_service"`
-	Shardkey          string    `json:"shardkey"`
-	SmID              int       `json:"sm_id"`
-	DateCreated       time.Time `json:"date_created"`
-	OofShard          string    `json:"oof_shard"`
-}
 
 type Cache struct {
 	sync.RWMutex
@@ -62,7 +16,7 @@ type Cache struct {
 }
 
 type Item struct {
-	Value      DataStruct
+	Value      model.DataStruct
 	Created    time.Time
 	Expiration int64
 }
@@ -86,7 +40,7 @@ func New(defaultExpiration, cleanupInterval time.Duration) *Cache {
 	return &cache
 }
 
-func (c *Cache) Set(key string, value DataStruct, duration time.Duration) {
+func (c *Cache) Set(key string, value model.DataStruct, duration time.Duration) {
 
 	var expiration int64
 
@@ -110,6 +64,12 @@ func (c *Cache) Set(key string, value DataStruct, duration time.Duration) {
 		Created:    time.Now(),
 	}
 
+}
+
+func (c *Cache) SetMap(m map[string]model.DataStruct, duration time.Duration) {
+	for k, v := range m {
+		c.Set(k, v, duration)
+	}
 }
 
 func (c *Cache) Get(key string) (interface{}, bool) {
@@ -203,4 +163,14 @@ func (c *Cache) clearItems(keys []string) {
 	for _, k := range keys {
 		delete(c.items, k)
 	}
+}
+
+func (c *Cache) Restore(db *postgres.Storage) error {
+	mmap, err := db.GetCachedMessages()
+	if err != nil {
+		return err
+	}
+
+	c.SetMap(mmap, 1*time.Hour)
+	return nil
 }

@@ -14,9 +14,17 @@ require (
 )
 
 require (
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/puddle/v2 v2.2.1 // indirect
+	golang.org/x/sync v0.1.0 // indirect
+)
+
+require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/jackc/pgx v3.6.2+incompatible // indirect
+	github.com/jackc/pgx/v5 v5.5.3
 	github.com/klauspost/compress v1.17.5 // indirect
 	github.com/nats-io/nats-server/v2 v2.10.10 // indirect
 	github.com/nats-io/nats-streaming-server v0.25.6 // indirect
