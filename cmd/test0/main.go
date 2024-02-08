@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -25,12 +24,10 @@ import (
 )
 
 func main() {
-	//TODO: init config ?
+
 	slog.Info("Reading config...")
 	cfg := config.ReadConfig()
 
-	//slog.Info()
-	//TODO: init connection to db
 	slog.Info("Coonection to db...")
 	storage, err := postgres.New(cfg.DbName, cfg.DbAddr, cfg.DbPort, cfg.DbUsername, cfg.DbPassword)
 	if err != nil {
@@ -38,60 +35,58 @@ func main() {
 		os.Exit(1)
 	}
 
-	//TODO: init cache
 	inCache := cache.New(time.Minute*10, time.Minute*5) //TODO: read time from config
-	// err = inCache.Restore(storage)
-	// if err != nil {
-	// 	slog.Error(err.Error())
-	// 	os.Exit(1)
-	// }
 
-	//TODO: subscribe
+	err = inCache.Restore(storage)
+	if err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
+	}
 
 	slog.Info("Subscribing...")
 	nc, err := stan.Connect("test-cluster", "1") //TODO: read name from config
 	if err != nil {
-		fmt.Println(err.Error())
+		slog.Error(err.Error())
 		os.Exit(1)
 	}
 	defer nc.Close()
 
 	nc.Subscribe("foo", func(m *stan.Msg) {
-		var msg model.DataStruct
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		var msg model.Order
 		slog.Info("Get msg")
 
 		err := json.Unmarshal(m.Data, &msg)
 		if err != nil {
-			fmt.Println(err.Error())
+			slog.Error(err.Error())
+			return
 		}
+
 		if msg.OrderUID == "" {
 			slog.Info("OrderUID is empty")
 			return
 		}
-		//fmt.Println(msg)
 
-		err = storage.WriteMessage(msg)
+		err = storage.WriteMessage(ctx, &msg)
 		if err != nil {
 			slog.Error(err.Error())
-		}
-		inCache.Set(msg.OrderUID, msg, 0)
-		if stored, ok := inCache.Get(msg.OrderUID); ok {
-			fmt.Println("stored:")
-			fmt.Println(stored)
+			return
 		}
 
-		slog.Info("ended")
+		go inCache.Set(msg.OrderUID, msg, 0)
 
-	})
+	}, stan.DurableName("cache-service"))
 
 	slog.Info("Starting server...")
 
 	r := chi.NewRouter()
-
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		t, _ := template.ParseFiles("index.html")
 		t.Execute(w, nil)
@@ -101,7 +96,8 @@ func main() {
 		id := chi.URLParam(r, "id")
 		slog.Info("Get msg:", slog.Any("id", id))
 		if id == "" {
-			w.Write([]byte("empty id"))
+			errResponse, _ := json.Marshal(model.Responce{Err: "Empty id"})
+			w.Write(errResponse)
 			return
 		}
 		if value, ok := inCache.Get(id); ok {
@@ -114,6 +110,7 @@ func main() {
 			}
 
 			w.Write(response)
+			slog.Info("Get msg from cache:", slog.Any("id", id))
 			return
 		}
 
@@ -122,8 +119,9 @@ func main() {
 		switch err {
 		case nil:
 			response, _ := json.Marshal(value)
+			slog.Info("Get msg from db:", slog.Any("id", id))
 			w.Write(response)
-		case pgx.ErrNoRows: //pgx.ErrNoRows:
+		case pgx.ErrNoRows:
 			errResponse, _ := json.Marshal(model.Responce{Err: "not found"})
 			w.Write(errResponse)
 			return
@@ -139,6 +137,7 @@ func main() {
 		Addr:    ":3333",
 		Handler: r,
 	}
+
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
@@ -148,9 +147,11 @@ func main() {
 		}
 	}()
 
-	slog.Info("Server is on port 3333")
+	slog.Info("Server is on", slog.Any("addr", srv.Addr))
 
 	<-done
+
+	// graceful shutdown
 	slog.Info("stopping server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

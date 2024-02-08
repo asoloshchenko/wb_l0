@@ -24,7 +24,6 @@ type Item struct {
 
 func New(defaultExpiration, cleanupInterval time.Duration) *Cache {
 
-	// инициализируем карту(map) в паре ключ(string)/значение(Item)
 	items := make(map[string]Item)
 
 	cache := Cache{
@@ -33,9 +32,8 @@ func New(defaultExpiration, cleanupInterval time.Duration) *Cache {
 		cleanupInterval:   cleanupInterval,
 	}
 
-	// Если интервал очистки больше 0, запускаем GC (удаление устаревших элементов)
 	if cleanupInterval > 0 {
-		cache.StartGC() // данный метод рассматривается ниже
+		cache.StartGC()
 	}
 
 	return &cache
@@ -45,12 +43,10 @@ func (c *Cache) Set(key string, value interface{}, duration time.Duration) {
 
 	var expiration int64
 
-	// Если продолжительность жизни равна 0 - используется значение по-умолчанию
 	if duration == 0 {
 		duration = c.defaultExpiration
 	}
 
-	// Устанавливаем время истечения кеша
 	if duration > 0 {
 		expiration = time.Now().Add(duration).UnixNano()
 	}
@@ -67,12 +63,6 @@ func (c *Cache) Set(key string, value interface{}, duration time.Duration) {
 
 }
 
-func (c *Cache) SetMap(m map[string]model.DataStruct, duration time.Duration) {
-	for k, v := range m {
-		c.Set(k, v, duration)
-	}
-}
-
 func (c *Cache) Get(key string) (interface{}, bool) {
 
 	c.RLock()
@@ -81,15 +71,12 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 
 	item, found := c.items[key]
 
-	// ключ не найден
 	if !found {
 		return nil, false
 	}
 
-	// Проверка на установку времени истечения, в противном случае он бессрочный
 	if item.Expiration > 0 {
 
-		// Если в момент запроса кеш устарел возвращаем nil
 		if time.Now().UnixNano() > item.Expiration {
 			return nil, false
 		}
@@ -106,7 +93,7 @@ func (c *Cache) Delete(key string) error {
 	defer c.Unlock()
 
 	if _, found := c.items[key]; !found {
-		return errors.New("Key not found")
+		return errors.New("key not found")
 	}
 
 	delete(c.items, key)
@@ -121,14 +108,13 @@ func (c *Cache) StartGC() {
 func (c *Cache) GC() {
 
 	for {
-		// ожидаем время установленное в cleanupInterval
+
 		<-time.After(c.cleanupInterval)
 
 		if c.items == nil {
 			return
 		}
 
-		// Ищем элементы с истекшим временем жизни и удаляем из хранилища
 		if keys := c.expiredKeys(); len(keys) != 0 {
 			c.clearItems(keys)
 
@@ -138,7 +124,6 @@ func (c *Cache) GC() {
 
 }
 
-// expiredKeys возвращает список "просроченных" ключей
 func (c *Cache) expiredKeys() (keys []string) {
 
 	c.RLock()
@@ -154,7 +139,6 @@ func (c *Cache) expiredKeys() (keys []string) {
 	return
 }
 
-// clearItems удаляет ключи из переданного списка, в нашем случае "просроченные"
 func (c *Cache) clearItems(keys []string) {
 
 	c.Lock()
@@ -163,6 +147,13 @@ func (c *Cache) clearItems(keys []string) {
 
 	for _, k := range keys {
 		delete(c.items, k)
+	}
+}
+
+// SetMap set map[string]model.Order, where key is order_uid to Cache
+func (c *Cache) SetMap(m map[string]model.Order, duration time.Duration) {
+	for k, v := range m {
+		c.Set(k, v, duration)
 	}
 }
 

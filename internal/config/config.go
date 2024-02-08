@@ -9,7 +9,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// TODO: add env tags
 type Config struct {
 	Env        string `yaml:"env" env-default:"local"`
 	HTTPServer `yaml:"http_server"`
@@ -18,6 +17,10 @@ type Config struct {
 }
 
 type Nats struct {
+	ClusterID   string `yaml:"cluster_id" env-default:"test-cluster"`
+	ClientId    string `yaml:"client_id" env-default:"1"`
+	ChanName    string `yaml:"chan_name" env-default:"foo"`
+	DurableName string `yaml:"durable_name" env-default:"cache-service"`
 }
 
 type HTTPServer struct {
@@ -51,14 +54,15 @@ func ReadConfig() *Config {
 	}
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		//slog.Error("Can't open config file", configPath)
+		slog.Error("Can't open config file", slog.Any("configPath", configPath))
 		os.Exit(1)
 	}
 
 	var cfg Config
 
 	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
-		slog.Error("Can't parse config file:", err)
+		slog.Error("Can't parse config file:", slog.Any("configPath", configPath))
+		os.Exit(1)
 	}
 
 	return &cfg

@@ -1,0 +1,22 @@
+http_server:
+  address: "0.0.0.0:8083"
+  timeout: 4s               # время на чтение и отправку запроса
+  iddle_timeout: 60s        # время жизни соединения
+
+db_con:
+  address: "localhost"
+  port: "5432"
+  db_name: "wb"
+  username: "soloshchenko_ad"
+  password: "sk!a3r5abas"
+
+cache:
+  default_expiration: 10 # 10 minutes
+  cleanup_interval: 10
+
+nats:
+  cluster_id: "test_cluster"
+  client_id: "test_client"
+  chan_name: "foo"
+  durable_name: "cache-service"
+  

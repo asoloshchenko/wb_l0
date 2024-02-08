@@ -12,14 +12,12 @@ import (
 
 	p "github.com/asoloshchenko/wb_l0/internal/publisher"
 
-	stan "github.com/nats-io/stan.go"
-	//"log/slog"
 	"fmt"
+
+	stan "github.com/nats-io/stan.go"
 )
 
 func main() {
-
-	// TODO add router
 
 	sc, err := stan.Connect("test-cluster", "pub")
 	if err != nil {
@@ -30,10 +28,9 @@ func main() {
 	defer sc.Close()
 
 	http.HandleFunc("/publish", func(w http.ResponseWriter, r *http.Request) {
-
 		w.Header().Add("Access-Control-Allow-Origin", "*")
-
 		w.Header().Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
+
 		msg := p.GetMsg()
 		bytes, err := json.Marshal(msg)
 		if err != nil {

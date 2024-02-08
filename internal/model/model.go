@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-type DataStruct struct {
+type Order struct {
 	OrderUID    string `json:"order_uid" db:"order_uid"`
 	TrackNumber string `json:"track_number" db:"track_number"`
 	Entry       string `json:"entry" db:"entry"`

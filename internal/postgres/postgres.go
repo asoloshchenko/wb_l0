@@ -11,7 +11,6 @@ import (
 
 	"github.com/asoloshchenko/wb_l0/internal/model"
 
-	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -21,8 +20,6 @@ type Storage struct {
 }
 
 func New(dbName, dbAddr, dbPort, dbUsername, dbPassword string) (*Storage, error) {
-	// TODO: connection pool
-
 	conString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbUsername, dbPassword, dbAddr, dbPort, dbName)
 
 	db, err := pgxpool.New(context.Background(), conString)
@@ -30,7 +27,7 @@ func New(dbName, dbAddr, dbPort, dbUsername, dbPassword string) (*Storage, error
 		return nil, fmt.Errorf("%w", err)
 	}
 
-	err = db.Ping(context.TODO())
+	err = db.Ping(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -38,14 +35,17 @@ func New(dbName, dbAddr, dbPort, dbUsername, dbPassword string) (*Storage, error
 	return &Storage{db: db}, nil
 }
 
-func (s *Storage) WriteMessage(msg model.DataStruct) error {
-	tx, err := s.db.BeginTx(context.TODO(), pgx.TxOptions{})
+// WriteMessage writes order to the postgres database.
+//
+// It takes a context and a Order pointer as parameters and returns an error.
+func (s *Storage) WriteMessage(ctx context.Context, msg *model.Order) error {
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec(context.TODO(), `INSERT INTO public.orders
+	_, err = tx.Exec(ctx, `INSERT INTO public.orders
 							    (order_uid, track_number, entry,
 								 name, phone, zip, city, address,
 								 region, email, transaction, request_id,
@@ -68,12 +68,12 @@ func (s *Storage) WriteMessage(msg model.DataStruct) error {
 		msg.InternalSignature, msg.CustomerID, msg.DeliveryService,
 		msg.Shardkey, msg.SmID, msg.DateCreated, msg.OofShard)
 	if err != nil {
-		tx.Rollback(context.TODO())
+		tx.Rollback(ctx)
 		return err
 	}
 
 	for _, it := range msg.Items {
-		_, err = tx.Exec(context.TODO(), `INSERT INTO public.items (order_uid, chrt_id, track_number,
+		_, err = tx.Exec(ctx, `INSERT INTO public.items (order_uid, chrt_id, track_number,
 								 price, rid, name, sale, size, total_price,
 								 nm_id, brand, status)
 						 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
@@ -82,12 +82,12 @@ func (s *Storage) WriteMessage(msg model.DataStruct) error {
 			it.Price, it.Rid, it.Name, it.Sale, it.Size,
 			it.TotalPrice, it.NmID, it.Brand, it.Status)
 		if err != nil {
-			tx.Rollback(context.TODO())
+			tx.Rollback(ctx)
 			return err
 		}
 	}
 
-	err = tx.Commit(context.TODO())
+	err = tx.Commit(ctx)
 	if err != nil {
 		tx.Rollback(context.TODO())
 		return err
@@ -96,12 +96,12 @@ func (s *Storage) WriteMessage(msg model.DataStruct) error {
 	return nil
 }
 
-func (s *Storage) GetMessageByID(id string) (model.DataStruct, error) {
+func (s *Storage) GetMessageByID(id string) (model.Order, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var msg model.DataStruct
+	var msg model.Order
 
 	err := s.db.QueryRow(ctx, `SELECT order_uid, track_number, entry,
 									  name, phone, zip, city, address,
@@ -144,7 +144,7 @@ func (s *Storage) GetMessageByID(id string) (model.DataStruct, error) {
 
 	if err != nil {
 		//slog.Error(err.Error())
-		return model.DataStruct{}, err
+		return model.Order{}, err
 	}
 
 	rows, err := s.db.Query(ctx, `SELECT chrt_id, track_number,
@@ -155,13 +155,13 @@ func (s *Storage) GetMessageByID(id string) (model.DataStruct, error) {
 								   WHERE track_number = $1`, msg.TrackNumber)
 	if err != nil {
 		//slog.Error(err.Error())
-		return model.DataStruct{}, err
+		return model.Order{}, err
 	}
 	items, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[model.Item])
 
 	if err != nil {
 		slog.Error(err.Error())
-		return model.DataStruct{}, err
+		return model.Order{}, err
 	}
 
 	msg.Items = append(msg.Items, items...)
@@ -169,18 +169,18 @@ func (s *Storage) GetMessageByID(id string) (model.DataStruct, error) {
 	return msg, nil
 }
 
-func (s *Storage) GetCachedMessages() (map[string]model.DataStruct, error) {
+func (s *Storage) GetCachedMessages() (map[string]model.Order, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	rows, _ := s.db.Query(ctx, "SELECT * FROM public.orders")
-	records, err := pgx.CollectRows(rows, pgx.RowToStructByName[model.DataStruct])
+	records, err := pgx.CollectRows(rows, pgx.RowToStructByName[model.Order])
 
 	if err != nil {
 		return nil, err
 	}
-	tmp := make(map[string]model.DataStruct)
+	tmp := make(map[string]model.Order)
 
 	for _, record := range records {
 		tmp[record.TrackNumber] = record
@@ -199,8 +199,11 @@ func (s *Storage) GetCachedMessages() (map[string]model.DataStruct, error) {
 		tmp[it.TrackNumber] = entry
 	}
 
-	if err != nil {
-		return nil, err
+	// reassigning
+	for _, v := range tmp {
+		tmp[v.OrderUID] = v
+		delete(tmp, v.TrackNumber)
 	}
+
 	return tmp, nil
 }
