@@ -7,8 +7,8 @@ db_con:
   address: "localhost"
   port: "5432"
   db_name: "wb"
-  username: "soloshchenko_ad"
-  password: "sk!a3r5abas"
+  username: "service"
+  password: "11111"
 
 cache:
   default_expiration: 10 # 10 minutes
