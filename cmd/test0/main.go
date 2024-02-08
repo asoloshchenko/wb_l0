@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,11 +14,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5"
 
-	"test/internal/cache"
-	"test/internal/config"
-	"test/internal/model"
-	"test/internal/postgres"
+	"github.com/asoloshchenko/wb_l0/internal/cache"
+	"github.com/asoloshchenko/wb_l0/internal/config"
+	"github.com/asoloshchenko/wb_l0/internal/model"
+	"github.com/asoloshchenko/wb_l0/internal/postgres"
 
 	"github.com/nats-io/stan.go"
 )
@@ -38,15 +40,13 @@ func main() {
 
 	//TODO: init cache
 	inCache := cache.New(time.Minute*10, time.Minute*5) //TODO: read time from config
-	err = inCache.Restore(storage)
-	if err != nil {
-		slog.Error(err.Error())
-		os.Exit(1)
-	}
+	// err = inCache.Restore(storage)
+	// if err != nil {
+	// 	slog.Error(err.Error())
+	// 	os.Exit(1)
+	// }
 
 	//TODO: subscribe
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	slog.Info("Subscribing...")
 	nc, err := stan.Connect("test-cluster", "1") //TODO: read name from config
@@ -54,9 +54,11 @@ func main() {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
+	defer nc.Close()
 
 	nc.Subscribe("foo", func(m *stan.Msg) {
 		var msg model.DataStruct
+		slog.Info("Get msg")
 
 		err := json.Unmarshal(m.Data, &msg)
 		if err != nil {
@@ -66,22 +68,38 @@ func main() {
 			slog.Info("OrderUID is empty")
 			return
 		}
+		//fmt.Println(msg)
+
+		err = storage.WriteMessage(msg)
+		if err != nil {
+			slog.Error(err.Error())
+		}
 		inCache.Set(msg.OrderUID, msg, 0)
-		storage.WriteMessage(msg)
+		if stored, ok := inCache.Get(msg.OrderUID); ok {
+			fmt.Println("stored:")
+			fmt.Println(stored)
+		}
+
+		slog.Info("ended")
 
 	})
 
 	slog.Info("Starting server...")
 
 	r := chi.NewRouter()
+
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		t, _ := template.ParseFiles("index.html")
+		t.Execute(w, nil)
+	})
 
-	r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/api/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-
+		slog.Info("Get msg:", slog.Any("id", id))
 		if id == "" {
 			w.Write([]byte("empty id"))
 			return
@@ -90,7 +108,8 @@ func main() {
 			response, err := json.Marshal(value)
 
 			if err != nil {
-				w.Write([]byte(err.Error()))
+				errResponse, _ := json.Marshal(model.Responce{Err: err.Error()})
+				w.Write(errResponse)
 				return
 			}
 
@@ -98,39 +117,50 @@ func main() {
 			return
 		}
 
-		if value, err := storage.GetMessageByID(id); err == nil {
-			response, err := json.Marshal(value)
+		value, err := storage.GetMessageByID(id)
 
-			if err != nil {
-				w.Write([]byte(err.Error()))
-				return
-			}
-
+		switch err {
+		case nil:
+			response, _ := json.Marshal(value)
 			w.Write(response)
+		case pgx.ErrNoRows: //pgx.ErrNoRows:
+			errResponse, _ := json.Marshal(model.Responce{Err: "not found"})
+			w.Write(errResponse)
+			return
+		default:
+			errResponse, _ := json.Marshal(model.Responce{Err: err.Error()})
+			w.Write(errResponse)
 			return
 		}
 
-		w.Write([]byte("No such id"))
-
-		//w.Write([]byte("welcome"))
 	})
 
 	srv := &http.Server{
 		Addr:    ":3333",
 		Handler: r,
 	}
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	http.ListenAndServe(":3333", r)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			slog.Error("failed to start server")
+		}
+	}()
 
 	slog.Info("Server is on port 3333")
 
 	<-done
 	slog.Info("stopping server...")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Info("failed to stop server")
+		return
 	}
+
+	slog.Info("server stopped")
 
 }

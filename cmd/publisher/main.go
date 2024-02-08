@@ -8,8 +8,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	p "test/internal/publisher"
 	"time"
+
+	p "github.com/asoloshchenko/wb_l0/internal/publisher"
 
 	stan "github.com/nats-io/stan.go"
 	//"log/slog"
@@ -29,6 +30,10 @@ func main() {
 	defer sc.Close()
 
 	http.HandleFunc("/publish", func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Add("Access-Control-Allow-Origin", "*")
+
+		w.Header().Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
 		msg := p.GetMsg()
 		bytes, err := json.Marshal(msg)
 		if err != nil {
@@ -43,7 +48,7 @@ func main() {
 		}
 
 		fmt.Println("sent succsesfully")
-		io.WriteString(w, "OK")
+		io.WriteString(w, "OK; OrderUID: "+msg.OrderUID)
 
 	})
 

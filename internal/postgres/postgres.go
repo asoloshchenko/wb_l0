@@ -2,11 +2,14 @@ package postgres
 
 import (
 	"context"
+	"log/slog"
+
 	//"database/sql"
 	"fmt"
 
-	"test/internal/model"
 	"time"
+
+	"github.com/asoloshchenko/wb_l0/internal/model"
 
 	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jackc/pgx/v5"
@@ -42,7 +45,8 @@ func (s *Storage) WriteMessage(msg model.DataStruct) error {
 		return err
 	}
 
-	_, err = tx.Exec(context.TODO(), `INSERT INTO orders (order_uid, track_number, entry,
+	_, err = tx.Exec(context.TODO(), `INSERT INTO public.orders
+							    (order_uid, track_number, entry,
 								 name, phone, zip, city, address,
 								 region, email, transaction, request_id,
 								 currency, provider, amount, payment_dt,
@@ -69,7 +73,7 @@ func (s *Storage) WriteMessage(msg model.DataStruct) error {
 	}
 
 	for _, it := range msg.Items {
-		_, err = tx.Exec(context.TODO(), `INSERT INTO items (order_uid, chrt_id, track_number,
+		_, err = tx.Exec(context.TODO(), `INSERT INTO public.items (order_uid, chrt_id, track_number,
 								 price, rid, name, sale, size, total_price,
 								 nm_id, brand, status)
 						 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
@@ -97,24 +101,72 @@ func (s *Storage) GetMessageByID(id string) (model.DataStruct, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	rows, _ := s.db.Query(ctx, "SELECT * FROM orders WHERE order_uid = $1", id)
-	msgs, err := pgx.CollectRows(rows, pgx.RowToStructByName[model.DataStruct])
+	var msg model.DataStruct
+
+	err := s.db.QueryRow(ctx, `SELECT order_uid, track_number, entry,
+									  name, phone, zip, city, address,
+									  region, email, transaction, request_id,
+									  currency, provider, amount, payment_dt,
+									  bank, delivery_cost, goods_total, 
+									  custom_fee, locale, internal_signature,
+									  customer_id, delivery_service, shardkey,
+	                                  sm_id, date_created, oof_shard
+							     FROM public.orders 
+								WHERE order_uid = $1`, id).Scan(
+		&msg.OrderUID,
+		&msg.TrackNumber,
+		&msg.Entry,
+		&msg.Delivery.Name,
+		&msg.Delivery.Phone,
+		&msg.Delivery.Zip,
+		&msg.Delivery.City,
+		&msg.Delivery.Address,
+		&msg.Delivery.Region,
+		&msg.Delivery.Email,
+		&msg.Payment.Transaction,
+		&msg.Payment.RequestID,
+		&msg.Payment.Currency,
+		&msg.Payment.Provider,
+		&msg.Payment.Amount,
+		&msg.Payment.PaymentDt,
+		&msg.Payment.Bank,
+		&msg.Payment.DeliveryCost,
+		&msg.Payment.GoodsTotal,
+		&msg.Payment.CustomFee,
+		&msg.Locale,
+		&msg.InternalSignature,
+		&msg.CustomerID,
+		&msg.DeliveryService,
+		&msg.Shardkey,
+		&msg.SmID,
+		&msg.DateCreated,
+		&msg.OofShard)
 
 	if err != nil {
+		//slog.Error(err.Error())
 		return model.DataStruct{}, err
 	}
 
-	rows, _ = s.db.Query(ctx, "SELECT * FROM items WHERE track_number = $1", msgs[0].TrackNumber)
-
-	items, err := pgx.CollectRows(rows, pgx.RowToStructByName[model.Item])
+	rows, err := s.db.Query(ctx, `SELECT chrt_id, track_number,
+										 price, rid, name, sale, 
+										 size, total_price,
+										 nm_id, brand, status
+								    FROM public.items 
+								   WHERE track_number = $1`, msg.TrackNumber)
+	if err != nil {
+		//slog.Error(err.Error())
+		return model.DataStruct{}, err
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[model.Item])
 
 	if err != nil {
+		slog.Error(err.Error())
 		return model.DataStruct{}, err
 	}
 
-	msgs[0].Items = append(msgs[0].Items, items...)
+	msg.Items = append(msg.Items, items...)
 
-	return msgs[0], nil
+	return msg, nil
 }
 
 func (s *Storage) GetCachedMessages() (map[string]model.DataStruct, error) {
@@ -122,7 +174,7 @@ func (s *Storage) GetCachedMessages() (map[string]model.DataStruct, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	rows, _ := s.db.Query(ctx, "SELECT * FROM orders")
+	rows, _ := s.db.Query(ctx, "SELECT * FROM public.orders")
 	records, err := pgx.CollectRows(rows, pgx.RowToStructByName[model.DataStruct])
 
 	if err != nil {
@@ -134,9 +186,9 @@ func (s *Storage) GetCachedMessages() (map[string]model.DataStruct, error) {
 		tmp[record.TrackNumber] = record
 	}
 
-	rows, _ = s.db.Query(ctx, "SELECT * FROM items")
+	rows, _ = s.db.Query(ctx, "SELECT * FROM public.items")
 
-	items, err := pgx.CollectRows(rows, pgx.RowToStructByName[model.Item])
+	items, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[model.Item])
 	if err != nil {
 		return nil, err
 	}

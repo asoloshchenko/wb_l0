@@ -51,3 +51,7 @@ type Item struct {
 	Brand       string `json:"brand" db:"brand"`
 	Status      int    `json:"status" db:"status"`
 }
+
+type Responce struct {
+	Err string `json:"error"`
+}

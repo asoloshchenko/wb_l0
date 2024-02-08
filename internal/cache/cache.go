@@ -3,9 +3,10 @@ package cache
 import (
 	"errors"
 	"sync"
-	"test/internal/model"
-	"test/internal/postgres"
 	"time"
+
+	"github.com/asoloshchenko/wb_l0/internal/model"
+	"github.com/asoloshchenko/wb_l0/internal/postgres"
 )
 
 type Cache struct {
@@ -16,7 +17,7 @@ type Cache struct {
 }
 
 type Item struct {
-	Value      model.DataStruct
+	Value      interface{}
 	Created    time.Time
 	Expiration int64
 }
@@ -40,7 +41,7 @@ func New(defaultExpiration, cleanupInterval time.Duration) *Cache {
 	return &cache
 }
 
-func (c *Cache) Set(key string, value model.DataStruct, duration time.Duration) {
+func (c *Cache) Set(key string, value interface{}, duration time.Duration) {
 
 	var expiration int64
 

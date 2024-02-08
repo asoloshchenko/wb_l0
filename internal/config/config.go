@@ -14,10 +14,14 @@ type Config struct {
 	Env        string `yaml:"env" env-default:"local"`
 	HTTPServer `yaml:"http_server"`
 	DBConn     `yaml:"db_con"`
+	Nats       `yaml:"nats"`
+}
+
+type Nats struct {
 }
 
 type HTTPServer struct {
-	Address     string        `yaml:"address" env-required:"true"`
+	Address     string        `yaml:"address" env-default:"localhost"`
 	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
 	IdleTimeout time.Duration `yaml:"idle-timeout" env-default:"60s"`
 }
@@ -25,7 +29,7 @@ type HTTPServer struct {
 type DBConn struct {
 	DbAddr     string `yaml:"address" env:"DB_ADDR" env-default:"localhost"`
 	DbPort     string `yaml:"port" env:"DB_PORT" env-default:"5432"`
-	DbName     string `yaml:"db_name" env:"DB_NAME" env-default:"pud_test"`
+	DbName     string `yaml:"db_name" env:"DB_NAME" env-default:"wb"`
 	DbUsername string `yaml:"username" env:"DB_USERNAME" env-required:"true"`
 	DbPassword string `yaml:"password" env:"DB_PASSWORD" env-required:"true"`
 }

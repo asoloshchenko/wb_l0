@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Web Page</title>
+  <!-- <script src="prettify.js"></script> -->
+</head>
+<body>
+  <input type="text" id="searchInput" placeholder="Enter search term">
+  <button onclick="publicButtonClick()">Public</button>
+  <button onclick="searchButtonClick()">Search</button>
+  <div id="puplisher"></div>
+  <pre id="json"></pre>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.5.0/jsoneditor.min.js"></script>
+  <script>
+    function publicButtonClick() {
+    fetch(`http://localhost:8080/publish`, 
+            {method: 'GET',
+        }).then(responce=>{
+                if(!responce.ok){
+                    throw new Error(responce.status);
+                }
+
+            }).then(data=>{
+                document.getElementById('puplisher').textContent = data;
+            })
+      // Add logic for handling the "Public" button click
+      //alert('Public button clicked');
+    }
+
+    function searchButtonClick() {
+      // Add logic for handling the "Search" button click
+      var searchTerm = document.getElementById('searchInput').value;
+      fetch(`http://localhost:3333/api/${searchTerm}`, 
+            {method: 'GET'}).then(responce=>{
+                if(!responce.ok){
+                    throw new Error(responce.status);
+                }
+                return responce.text();
+            }).then(data=>{
+                //var jsonData = '{"name": "John", "age": 30, "city": "New York"}'; // Replace with your JSON data
+                var jsonData = JSON.parse(data);
+                document.getElementById('json').textContent = JSON.stringify(jsonData, null, 2);
+                prettyPrint();
+            }).catch(err=>{
+                console.error(err);
+            })
+      //alert('Search button clicked with search term: ' + searchTerm);
+    }
+  </script>
+</body>
+</html>
