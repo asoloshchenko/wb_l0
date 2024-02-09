@@ -44,7 +44,7 @@ func main() {
 	}
 
 	slog.Info("Subscribing...")
-	nc, err := stan.Connect("test-cluster", "1") //TODO: read name from config
+	nc, err := stan.Connect(cfg.Nats.ClusterID, cfg.Nats.ClientId, stan.NatsURL(cfg.Nats.StanURL)) //TODO: read name from config
 	if err != nil {
 		slog.Error(err.Error())
 		os.Exit(1)
@@ -77,7 +77,7 @@ func main() {
 
 		go inCache.Set(msg.OrderUID, msg, 0)
 
-	}, stan.DurableName("cache-service"))
+	}, stan.DurableName(cfg.Nats.DurableName))
 
 	slog.Info("Starting server...")
 
@@ -134,7 +134,7 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:    ":3333",
+		Addr:    cfg.HTTPServer.Address,
 		Handler: r,
 	}
 
