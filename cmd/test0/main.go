@@ -56,7 +56,6 @@ func main() {
 		defer cancel()
 
 		var msg model.Order
-		slog.Info("Get msg")
 
 		err := json.Unmarshal(m.Data, &msg)
 		if err != nil {
@@ -75,7 +74,8 @@ func main() {
 			return
 		}
 
-		go inCache.Set(msg.OrderUID, msg, 0)
+		inCache.Set(msg.OrderUID, msg, 0)
+		slog.Info("Saved msg to cache:", slog.Any("id", msg.OrderUID))
 
 	}, stan.DurableName(cfg.Nats.DurableName))
 
@@ -94,12 +94,13 @@ func main() {
 
 	r.Get("/api/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		slog.Info("Get msg:", slog.Any("id", id))
-		if id == "" {
-			errResponse, _ := json.Marshal(model.Responce{Err: "Empty id"})
-			w.Write(errResponse)
-			return
-		}
+
+		// if id == "" {
+		// 	errResponse, _ := json.Marshal(model.Responce{Err: "Empty id"})
+		// 	w.Write(errResponse)
+		// 	return
+		// }
+
 		if value, ok := inCache.Get(id); ok {
 			response, err := json.Marshal(value)
 

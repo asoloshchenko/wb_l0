@@ -174,7 +174,49 @@ func (s *Storage) GetCachedMessages() (map[string]model.Order, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	rows, _ := s.db.Query(ctx, "SELECT * FROM public.orders")
+	rows, _ := s.db.Query(ctx, `SELECT order_uid, track_number, entry,
+	name, phone, zip, city, address,
+	region, email, transaction, request_id,
+	currency, provider, amount, payment_dt,
+	bank, delivery_cost, goods_total, 
+	custom_fee, locale, internal_signature,
+	customer_id, delivery_service, shardkey,
+	sm_id, date_created, oof_shard FROM public.orders`)
+	orders := make(map[string]model.Order)
+	var msg model.Order
+
+	pgx.ForEachRow(rows, []any{&msg.OrderUID,
+		&msg.TrackNumber,
+		&msg.Entry,
+		&msg.Delivery.Name,
+		&msg.Delivery.Phone,
+		&msg.Delivery.Zip,
+		&msg.Delivery.City,
+		&msg.Delivery.Address,
+		&msg.Delivery.Region,
+		&msg.Delivery.Email,
+		&msg.Payment.Transaction,
+		&msg.Payment.RequestID,
+		&msg.Payment.Currency,
+		&msg.Payment.Provider,
+		&msg.Payment.Amount,
+		&msg.Payment.PaymentDt,
+		&msg.Payment.Bank,
+		&msg.Payment.DeliveryCost,
+		&msg.Payment.GoodsTotal,
+		&msg.Payment.CustomFee,
+		&msg.Locale,
+		&msg.InternalSignature,
+		&msg.CustomerID,
+		&msg.DeliveryService,
+		&msg.Shardkey,
+		&msg.SmID,
+		&msg.DateCreated,
+		&msg.OofShard},
+		func() error {
+			orders[msg.TrackNumber] = msg
+			return nil
+		})
 	records, err := pgx.CollectRows(rows, pgx.RowToStructByName[model.Order])
 
 	if err != nil {
@@ -186,7 +228,11 @@ func (s *Storage) GetCachedMessages() (map[string]model.Order, error) {
 		tmp[record.TrackNumber] = record
 	}
 
-	rows, _ = s.db.Query(ctx, "SELECT * FROM public.items")
+	rows, _ = s.db.Query(ctx, `SELECT chrt_id, track_number,
+									  price, rid, name, sale, 
+									  size, total_price,
+									  nm_id, brand, status 
+								FROM public.items`)
 
 	items, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[model.Item])
 	if err != nil {
